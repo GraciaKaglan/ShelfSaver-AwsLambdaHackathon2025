@@ -1,5 +1,175 @@
-/* Reset and basic setup */
 * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: var(--tg-theme-bg-color, #ffffff);
+    color: var(--tg-theme-text-color, #000000);
+    overflow-x: hidden;
+}
+
+.mini-app {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background: var(--tg-theme-secondary-bg-color, #f1f1f1);
+    padding: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+}
+
+.header h1 {
+    font-size: 24px;
+    font-weight: 600;
+}
+
+.user-info {
+    font-size: 14px;
+    color: var(--tg-theme-hint-color, #666);
+}
+
+.content {
+    flex: 1;
+    padding: 20px;
+}
+
+.stats-bar {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 25px;
+}
+
+.stat {
+    background: var(--tg-theme-secondary-bg-color, #f8f9fa);
+    padding: 20px;
+    border-radius: 12px;
+    flex: 1;
+    text-align: center;
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+}
+
+.stat .number {
+    display: block;
+    font-size: 28px;
+    font-weight: bold;
+    color: var(--tg-theme-accent-text-color, #3390ec);
+}
+
+.stat.warning .number {
+    color: #ff9500;
+}
+
+.stat .label {
+    font-size: 14px;
+    color: var(--tg-theme-hint-color, #666);
+    margin-top: 5px;
+}
+
+.product-list {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+}
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: var(--tg-theme-hint-color, #666);
+}
+
+.empty-state p {
+    margin-bottom: 10px;
+}
+
+.footer {
+    padding: 20px;
+    background: var(--tg-theme-secondary-bg-color, #f1f1f1);
+    border-top: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+}
+
+.main-btn {
+    width: 100%;
+    padding: 15px;
+    background: var(--tg-theme-button-color, #3390ec);
+    color: var(--tg-theme-button-text-color, #ffffff);
+    border: none;
+    border-radius: 12px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.main-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.main-btn:active {
+    transform: translateY(0);
+}
+
+/* Product card styles for when we add them */
+.product-card {
+    background: var(--tg-theme-secondary-bg-color, #ffffff);
+    border: 1px solid var(--tg-theme-hint-color, #e0e0e0);
+    border-radius: 12px;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.product-image {
+    width: 60px;
+    height: 60px;
+    border-radius: 8px;
+    object-fit: cover;
+    background: var(--tg-theme-hint-color, #f0f0f0);
+}
+
+.product-info {
+    flex: 1;
+}
+
+.product-name {
+    font-weight: 600;
+    margin-bottom: 8px;
+    line-height: 1.3;
+}
+
+.product-details {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.quantity {
+    background: var(--tg-theme-hint-color, #f0f0f0);
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+}
+
+.expiry-date {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+.expiry-date.safe { color: #34c759; }
+.expiry-date.warning { color: #ff9500; }
+.expiry-date.expired { color: #ff3b30; }
+
+/* Reset and basic setup */
+/* * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
@@ -9,10 +179,10 @@ body {
     font-family: Arial, sans-serif;
     padding: 20px;
     background-color: #f5f5f5;
-}
+} */
 
 /* Product card container */
-.product-card {
+/* .product-card {
     display: flex;
     align-items: center;
     background: white;
@@ -20,18 +190,18 @@ body {
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     margin-bottom: 10px;
-}
+} */
 
 /* Product image */
-.product-image {
+/* .product-image {
     width: 80px;
     height: 100px;
     border-radius: 8px;
     margin-right: 15px;
-}
+} */
 
 /* Product info section */
-.product-info {
+/* .product-info {
     flex: 1;
 }
 
@@ -46,20 +216,20 @@ body {
     display: flex;
     gap: 15px;
     align-items: center;
-}
+} */
 
 /* Quantity pill */
-.quantity {
-/*   background-color: #f0f0f0;*/
+/* .quantity {
+  background-color: #f0f0f0;
     padding: 8px 12px;
     border-radius: 12px;
     font-size: 18px;
     font-weight: bold;
     color: #000000;
-}
+} */
 
 /* Quantity controls */
-.quantity-controls {
+/* .quantity-controls {
     display: flex;
     align-items: center;
     gap: px;
@@ -80,17 +250,17 @@ body {
 
 .quantity-btn:hover {
     background: #f5f5f5;
-}
+} */
 
 /* Expiry date */
-.expiry-date {
+/* .expiry-date {
     font-size: 18px;
     font-weight: bold;
     color: #333;
-}
+} */
 
 /* Modify button */
-.modify-btn {
+/* .modify-btn {
     background-color: #e11d48;
     color: white;
     border: none;
@@ -102,10 +272,10 @@ body {
 
 .modify-btn:hover {
     background-color: #be123c;
-}
+} */
 
 /* Mobile responsive */
-@media (max-width: 1000px) {
+/* @media (max-width: 1000px) {
     body {
         padding: 10px;
     }
@@ -147,4 +317,4 @@ body {
         height: 35px;
         font-size: 20px;
     }
-}
+} */

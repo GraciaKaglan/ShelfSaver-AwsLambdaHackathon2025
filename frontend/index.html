@@ -1,4 +1,55 @@
 <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ShelfSaver</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="mini-app">
+        <header class="header">
+            <h1>📦 ShelfSaver</h1>
+            <div class="user-info">
+                <span id="user-name">Loading...</span>
+            </div>
+        </header>
+
+        <main class="content">
+            <div class="stats-bar">
+                <div class="stat">
+                    <span class="number" id="total-products">0</span>
+                    <span class="label">Products</span>
+                </div>
+                <div class="stat warning">
+                    <span class="number" id="expiring-count">0</span>
+                    <span class="label">Expiring</span>
+                </div>
+            </div>
+
+            <div class="product-list" id="product-list">
+                <!-- Products will be loaded here -->
+                <div class="empty-state">
+                    <p>📸 No products scanned yet</p>
+                    <p>Send photos to the bot to get started!</p>
+                </div>
+            </div>
+        </main>
+
+        <footer class="footer">
+            <button class="main-btn" id="validate-btn">
+                ✅ Validate All Products
+            </button>
+        </footer>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
+
+
+<!-- <!DOCTYPE html>
 
 <html lang="en">
     <head>
@@ -20,4 +71,4 @@
         </div>
         <button class="modify-btn">Modifier</button>
     </body>
-</html>
+</html> -->
