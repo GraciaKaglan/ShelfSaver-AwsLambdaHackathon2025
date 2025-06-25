@@ -1,17 +1,31 @@
-import json
 import os
-import urllib.request
-import urllib.parse
-import boto3
 import re
+import json
+import uuid
+import boto3
+import urllib.parse
+import urllib.request
+from decimal import Decimal
 from datetime import datetime
 
 # Initialize AWS clients for PARIS REGION
 textract = boto3.client('textract', region_name='eu-west-3')
 s3 = boto3.client('s3', region_name='eu-west-3')
 
+#DB
+dynamodb = boto3.resource('dynamodb', region_name='eu-north-1')
+table = dynamodb.Table('shelf-saver-products')
+
 # Updated bucket name for Paris
 BUCKET_NAME = 'shelfsaver-images-paris'
+
+# Helper to convert DynamoDB Decimal to regular numbers
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, Decimal):
+            return float(o)
+        return super(DecimalEncoder, self).default(o)
+
 
 # JSON Configuration for regex patterns
 REGEX_CONFIG = {
@@ -44,6 +58,299 @@ REGEX_CONFIG = {
 }
 
 def lambda_handler(event, context):
+    print(f"🔍 DEBUG - Full event: {json.dumps(event, indent=2)}")
+
+    # CORS headers for API requests
+    headers = {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Headers': 'Content-Type',
+        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+    }
+    
+    # Check for HTTP API v2.0 format (API Gateway)
+    if event.get('version') == '2.0' and 'routeKey' in event:
+        # This is HTTP API v2.0 (API Gateway)
+        method = event['requestContext']['http']['method']
+        route_key = event['routeKey']
+        raw_path = event.get('rawPath', '')
+        
+        print(f"🌐 HTTP API v2.0 detected - Method: {method}, RouteKey: {route_key}, RawPath: {raw_path}")
+        
+        # Handle CORS preflight
+        if method == 'OPTIONS':
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': ''
+            }
+        
+        return handle_http_api_v2_request(event, context, headers, method, route_key, raw_path)
+    
+    # Check if this is a traditional REST API request (has httpMethod)
+    elif 'httpMethod' in event:
+        # This is traditional REST API
+        method = event['httpMethod']
+        path = event.get('path', '')
+        
+        print(f"🌐 REST API Request: {method} {path}")
+        return handle_api_gateway_request(event, context, headers, method, path)
+    
+    # Check if this is a Lambda Function URL request (has requestContext.http but no version)
+    elif 'requestContext' in event and 'http' in event['requestContext'] and not event.get('version'):
+        # This is a Lambda Function URL request
+        method = event['requestContext']['http']['method']
+        path = event['requestContext']['http']['path']
+        
+        print(f"🌐 Lambda URL Request: {method} {path}")
+        return handle_api_request_lambda_url(event, context, headers, method, path)
+    
+    # Otherwise, treat as Telegram webhook
+    else:
+        print("📱 Telegram Webhook Request")
+        return handle_telegram_webhook(event, context)
+
+def handle_http_api_v2_request(event, context, headers, method, route_key, raw_path):
+    """Handle HTTP API v2.0 requests (API Gateway)"""
+    try:
+        print(f"🌐 Processing HTTP API v2.0 Request:")
+        print(f"   Method: {method}")
+        print(f"   RouteKey: {route_key}")
+        print(f"   RawPath: {raw_path}")
+        
+        # Extract path parameters
+        path_params = event.get('pathParameters') or {}
+        print(f"   Path Parameters: {path_params}")
+        
+        # Use routeKey for matching (this is the most reliable for HTTP API v2.0)
+        if method == 'GET' and route_key == 'GET /products':
+            print("✅ Matched: GET /products")
+            return get_all_products(event, headers)
+        elif method == 'GET' and route_key == 'GET /products/{id}':
+            print("✅ Matched: GET /products/{id}")
+            product_id = path_params.get('id')
+            print(f"   Product ID: {product_id}")
+            return get_product(product_id, headers)
+        elif method == 'PUT' and route_key == 'PUT /products/{id}':
+            print("✅ Matched: PUT /products/{id}")
+            product_id = path_params.get('id')
+            return update_product(product_id, event, headers)
+        elif method == 'POST' and route_key == 'POST /webhook':
+            print("✅ Matched: POST /webhook")
+            return handle_telegram_webhook(event, context)
+        else:
+            print(f"❌ No match found for: {method} {route_key}")
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({
+                    'error': f'API endpoint not found',
+                    'method': method,
+                    'route_key': route_key,
+                    'raw_path': raw_path,
+                    'path_params': path_params,
+                    'available_endpoints': [
+                        'GET /products',
+                        'GET /products/{id}',
+                        'PUT /products/{id}',
+                        'POST /webhook'
+                    ]
+                })
+            }
+            
+    except Exception as e:
+        print(f"💥 HTTP API v2.0 Error: {e}")
+        import traceback
+        print(f"💥 Traceback: {traceback.format_exc()}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+        
+def handle_api_request_lambda_url(event, context, headers, method, path):
+    """Handle API requests from Lambda Function URL (backup)"""
+    try:
+        print(f"🌐 Processing Lambda URL Request: {method} {path}")
+        
+        if method == 'GET' and path == '/products':
+            return get_all_products(event, headers)
+        elif method == 'GET' and path.startswith('/products/'):
+            product_id = path.split('/')[-1]
+            return get_product(product_id, headers)
+        elif method == 'PUT' and path.startswith('/products/'):
+            product_id = path.split('/')[-1]
+            return update_product(product_id, event, headers)
+        else:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': f'API endpoint not found: {method} {path}'})
+            }
+            
+    except Exception as e:
+        print(f"💥 Lambda URL Error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def handle_api_request(event, context, headers):
+    """Handle API requests from frontend"""
+    try:
+        method = event['httpMethod']
+        path = event.get('path', '')
+        
+        print(f"🌐 API Request: {method} {path}")
+        
+        if method == 'GET' and path == '/products':
+            return get_all_products(event, headers)
+        elif method == 'GET' and path.startswith('/products/'):
+            product_id = path.split('/')[-1]
+            return get_product(product_id, headers)
+        elif method == 'PUT' and path.startswith('/products/'):
+            product_id = path.split('/')[-1]
+            return update_product(product_id, event, headers)
+        else:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': 'API endpoint not found'})
+            }
+            
+    except Exception as e:
+        print(f"💥 API Error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def get_all_products(event, headers):
+    """Get all products for a user"""
+    try:
+        # Get user_id from query parameters (handle both API Gateway and Lambda Function URL formats)
+        query_params = event.get('queryStringParameters') or {}
+        
+        # For Lambda Function URLs, parse rawQueryString if queryStringParameters is None
+        if not query_params and event.get('rawQueryString'):
+            import urllib.parse
+            query_params = dict(urllib.parse.parse_qsl(event['rawQueryString']))
+        
+        user_id = query_params.get('user_id')
+        
+        print(f"📊 Fetching products for user: {user_id}")
+        
+        if user_id and user_id != 'demo':
+            # Filter by user_id
+            response = table.scan(
+                FilterExpression=boto3.dynamodb.conditions.Attr('user_id').eq(user_id)
+            )
+        else:
+            # Get all products (for demo)
+            response = table.scan()
+        
+        products = response['Items']
+        
+        # Add S3 image URLs
+        for product in products:
+            if product.get('image_s3_key'):
+                product['image_url'] = f"https://{BUCKET_NAME}.s3.eu-west-3.amazonaws.com/{product['image_s3_key']}"
+        
+        print(f"✅ Found {len(products)} products")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({
+                'products': products,
+                'count': len(products)
+            }, cls=DecimalEncoder)
+        }
+        
+    except Exception as e:
+        print(f"💥 Get products error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def get_product(product_id, headers):
+    """Get a single product"""
+    try:
+        print(f"🔍 Fetching product: {product_id}")
+        
+        response = table.get_item(Key={'product_id': product_id})
+        
+        if 'Item' in response:
+            product = response['Item']
+            # Add S3 image URL
+            if product.get('image_s3_key'):
+                product['image_url'] = f"https://{BUCKET_NAME}.s3.eu-west-3.amazonaws.com/{product['image_s3_key']}"
+            
+            return {
+                'statusCode': 200,
+                'headers': headers,
+                'body': json.dumps(product, cls=DecimalEncoder)
+            }
+        else:
+            return {
+                'statusCode': 404,
+                'headers': headers,
+                'body': json.dumps({'error': 'Product not found'})
+            }
+            
+    except Exception as e:
+        print(f"💥 Get product error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def update_product(product_id, event, headers):
+    """Update a product"""
+    try:
+        # Parse request body
+        body = json.loads(event['body'])
+        
+        print(f"✏️ Updating product {product_id}: {body}")
+        
+        # Update product
+        update_expression = []
+        expression_values = {}
+        
+        for key, value in body.items():
+            if key != 'product_id':  # Don't update the primary key
+                update_expression.append(f"{key} = :{key}")
+                expression_values[f":{key}"] = value
+        
+        if update_expression:
+            table.update_item(
+                Key={'product_id': product_id},
+                UpdateExpression='SET ' + ', '.join(update_expression),
+                ExpressionAttributeValues=expression_values
+            )
+        
+        print(f"✅ Product {product_id} updated successfully")
+        
+        return {
+            'statusCode': 200,
+            'headers': headers,
+            'body': json.dumps({'message': 'Product updated successfully'})
+        }
+        
+    except Exception as e:
+        print(f"💥 Update product error: {e}")
+        return {
+            'statusCode': 500,
+            'headers': headers,
+            'body': json.dumps({'error': str(e)})
+        }
+
+def handle_telegram_webhook(event, context):
+    """Handle Telegram webhook (your existing code)"""
     try:
         print("🚀 ShelfSaver webhook received in PARIS! 🇫🇷")
         
@@ -78,6 +385,10 @@ def lambda_handler(event, context):
                 elif text.lower() == '/debug':
                     debug_info = f"🔧 Debug Info:\n📍 Region: Europe (Paris) eu-west-3\n🪣 Bucket: {BUCKET_NAME}\n🤖 OCR: AWS Textract"
                     send_message(bot_token, chat_id, debug_info)
+                elif text.lower() == '/webapp':
+                    # Send web app link
+                    webapp_text = "🌐 Open ShelfSaver Web App:\nhttps://graciakaglan.github.io/ShelfSaver-AwsLambdaHackathon2025/frontend/"
+                    send_message(bot_token, chat_id, webapp_text)
                 else:
                     send_message(bot_token, chat_id, "📸 Send a product photo for analysis!")
     
@@ -88,6 +399,62 @@ def lambda_handler(event, context):
         return {'statusCode': 500, 'body': f'Error: {str(e)}'}
     
     return {'statusCode': 200, 'body': json.dumps({'status': 'ok', 'region': 'eu-west-3'})}
+
+
+def adjust_expiry_for_demo(expiry_date):
+    """Convert old dates to demo-friendly dates"""
+    if expiry_date:
+        try:
+            # If date is in 2024, make it current/near future
+            if '24' in expiry_date or '2024' in expiry_date:
+                from datetime import datetime, timedelta
+                
+                # Make some expire today, some tomorrow, some in a week
+                import random
+                days_ahead = random.choice([0, 1, 2, 7])  # Today, tomorrow, 2 days, week
+                
+                new_date = datetime.now() + timedelta(days=days_ahead)
+                return new_date.strftime('%d/%m/%y')
+        except:
+            pass
+    return expiry_date
+
+def save_to_database(result, chat_id):
+    """Save OCR result to DynamoDB - super simple!"""
+    try:
+        DEMO_MODE = os.environ.get('DEMO_MODE', 'false').lower() == 'true'
+
+        if DEMO_MODE and result.get('expiry_date'):
+            result['expiry_date'] = adjust_expiry_for_demo(result['expiry_date'])
+            print(f"🎬 Demo mode: Adjusted expiry date to {result['expiry_date']}")
+
+        # Create unique ID
+        product_id = str(uuid.uuid4())
+        
+        # Prepare item for database
+        item = {
+            'product_id': product_id,
+            'file_id': result['file_id'],
+            'product_name': result['product_name'],
+            'expiry_date': result.get('expiry_date', ''),
+            'barcode': result.get('barcode', ''),
+            'quantity': result.get('quantity', ''),
+            'confidence': result['confidence'],
+            'raw_text': result['raw_text'],
+            'image_s3_key': result['image_s3_key'],
+            'user_id': str(chat_id),
+            'created_at': datetime.now().isoformat(),
+            'status': 'pending'
+        }
+        
+        # Save to database
+        table.put_item(Item=item)
+        print(f"✅ Saved to database: {product_id}")
+        return product_id
+        
+    except Exception as e:
+        print(f"❌ Database save failed: {e}")
+        return None
 
 def process_product_paris(bot_token, file_id, chat_id):
     """Process product with Paris region infrastructure"""
@@ -122,6 +489,7 @@ def process_product_paris(bot_token, file_id, chat_id):
         }
         
         print(f"✅ Paris processing complete: {json.dumps(result, indent=2)}")
+        save_to_database(result, chat_id)
         return result
         
     except Exception as e:
