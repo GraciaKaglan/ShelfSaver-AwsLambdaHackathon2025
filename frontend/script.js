@@ -61,18 +61,7 @@ async function loadProducts() {
         const data = await response.json();
         allProducts = data.products || [];
         
-        console.log('🔍 DEBUG - Raw products from API:', allProducts);
-        
-        // Debug each product's image data
-        allProducts.forEach((product, index) => {
-            console.log(`🔍 Product ${index + 1}:`, {
-                name: product.product_name,
-                image_s3_key: product.image_s3_key,
-                image_url: product.image_url,
-                hasImageUrl: !!product.image_url,
-                imageUrlLength: product.image_url?.length
-            });
-        });
+        console.log('Loaded products:', allProducts);
         
         const transformedProducts = allProducts.map(product => ({
             id: product.product_id,
@@ -82,14 +71,9 @@ async function loadProducts() {
             confidence: Math.round(product.confidence || 0),
             barcode: product.barcode,
             status: product.status || 'pending',
-            image: product.image_url || generatePlaceholderImage(product.product_name),
-            created_at: product.created_at,
-            // Keep raw data for debugging
-            raw_image_url: product.image_url,
-            raw_s3_key: product.image_s3_key
+            image: generateWorkingPlaceholderImage(product.product_name),
+            created_at: product.created_at
         }));
-        
-        console.log('🔍 DEBUG - Transformed products:', transformedProducts);
         
         displayProducts(transformedProducts);
         
@@ -113,9 +97,32 @@ async function loadProducts() {
     }
 }
 
-function generatePlaceholderImage(productName) {
-    const firstLetter = (productName || 'P')[0].toUpperCase();
-    return `https://via.placeholder.com/80x80/3390ec/ffffff?text=${firstLetter}`;
+function generateWorkingPlaceholderImage(productName) {
+    const name = productName || 'Product';
+    const firstLetter = name[0].toUpperCase();
+    
+    // Use different emoji based on product name
+    const emojis = ['📦', '🥫', '🍞', '🥛', '🧀', '🥩', '🍎', '🥕', '🍕', '🍔'];
+    const emojiIndex = name.length % emojis.length;
+    const emoji = emojis[emojiIndex];
+    
+    // Create SVG data URL (works offline and with any network)
+    const colors = [
+        '#3390ec', '#34c759', '#ff9500', '#ff3b30', 
+        '#007aff', '#ff2d92', '#5856d6', '#ff8c00'
+    ];
+    const colorIndex = name.length % colors.length;
+    const bgColor = colors[colorIndex];
+    
+    const svg = `
+        <svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
+            <rect width="80" height="80" fill="${bgColor}" rx="12"/>
+            <text x="40" y="30" text-anchor="middle" fill="white" font-size="20" font-family="Arial">${firstLetter}</text>
+            <text x="40" y="55" text-anchor="middle" font-size="24">${emoji}</text>
+        </svg>
+    `;
+    
+    return 'data:image/svg+xml;base64,' + btoa(svg);
 }
 
 function displayProducts(products) {
@@ -139,23 +146,13 @@ function displayProducts(products) {
         return;
     }
     
-    // Display products with debug info
-    productList.innerHTML = products.map((product, index) => {
-        console.log(`🔍 Rendering product ${index + 1} with image:`, product.image);
-        
-        return `
+    // Display products
+    productList.innerHTML = products.map(product => `
         <div class="product-card" data-product-id="${product.id}">
-            <div style="position: relative;">
-                <img class="product-image" 
-                     src="${product.image}" 
-                     alt="${product.name}"
-                     onload="console.log('✅ Image loaded successfully:', this.src)"
-                     onerror="handleImageError(this, '${product.name}', '${product.raw_image_url}', '${product.raw_s3_key}')"
-                     style="border: 2px solid #e0e0e0;">
-                <div class="debug-info" style="position: absolute; bottom: -20px; left: 0; font-size: 8px; color: #666; max-width: 80px; overflow: hidden;">
-                    ${product.raw_image_url ? 'Has URL' : 'No URL'}
-                </div>
-            </div>
+            <img class="product-image" 
+                 src="${product.image}" 
+                 alt="${product.name}"
+                 style="border: 2px solid #e0e0e0;">
             <div class="product-info">
                 <div class="product-name">${product.name}</div>
                 <div class="product-details">
@@ -166,70 +163,10 @@ function displayProducts(products) {
                 <div class="product-actions">
                     <button class="edit-btn" onclick="editProduct('${product.id}')">✏️ Edit</button>
                     <button class="validate-btn" onclick="validateProduct('${product.id}')">✅ Validate</button>
-                    <button class="debug-btn" onclick="debugImage('${product.raw_image_url}', '${product.raw_s3_key}')" 
-                            style="background: #007aff; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 10px; margin-top: 4px;">
-                        🔍 Debug Image
-                    </button>
                 </div>
             </div>
         </div>
-    `;
-    }).join('');
-}
-
-// Enhanced image error handler
-function handleImageError(img, productName, rawImageUrl, rawS3Key) {
-    console.error('❌ Image failed to load:');
-    console.error('  - Image src:', img.src);
-    console.error('  - Product name:', productName);
-    console.error('  - Raw image URL:', rawImageUrl);
-    console.error('  - Raw S3 key:', rawS3Key);
-    
-    // Try to load the S3 URL directly if different
-    if (rawImageUrl && rawImageUrl !== img.src) {
-        console.log('🔄 Trying raw S3 URL:', rawImageUrl);
-        img.src = rawImageUrl;
-        img.onerror = function() {
-            console.error('❌ Raw S3 URL also failed, using placeholder');
-            this.src = generatePlaceholderImage(productName);
-        };
-    } else {
-        console.log('🔄 Using placeholder image');
-        img.src = generatePlaceholderImage(productName);
-    }
-}
-
-// Debug function to test image URLs
-function debugImage(imageUrl, s3Key) {
-    console.log('🔍 DEBUG IMAGE INFO:');
-    console.log('  - Image URL:', imageUrl);
-    console.log('  - S3 Key:', s3Key);
-    
-    if (imageUrl) {
-        // Test if URL is accessible
-        fetch(imageUrl, { method: 'HEAD' })
-            .then(response => {
-                console.log('✅ Image URL is accessible');
-                console.log('  - Status:', response.status);
-                console.log('  - Headers:', [...response.headers.entries()]);
-                
-                // Try opening in new tab
-                const confirm = window.confirm('Image URL seems accessible. Open in new tab?');
-                if (confirm) {
-                    window.open(imageUrl, '_blank');
-                }
-            })
-            .catch(error => {
-                console.error('❌ Image URL is NOT accessible:');
-                console.error('  - Error:', error);
-                console.error('  - This might be a CORS issue or the image doesn\'t exist');
-                
-                tg.showAlert(`Image URL issue: ${error.message}`);
-            });
-    } else {
-        console.log('❌ No image URL provided');
-        tg.showAlert('No image URL found for this product');
-    }
+    `).join('');
 }
 
 function isExpiringSoon(expiry) {
