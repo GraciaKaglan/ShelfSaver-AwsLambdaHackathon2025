@@ -13,7 +13,7 @@ const tg = window.Telegram?.WebApp || {
     openTelegramLink: (url) => window.open(url, '_blank')
 };
 
-// API Configuration - UPDATE WITH YOUR ACTUAL API URL
+// API Configuration
 const API_BASE_URL = 'https://ifv2owwcx7.execute-api.eu-north-1.amazonaws.com/prod';
 
 // Global variables
@@ -61,7 +61,18 @@ async function loadProducts() {
         const data = await response.json();
         allProducts = data.products || [];
         
-        console.log('Loaded products:', allProducts);
+        console.log('🔍 DEBUG - Raw products from API:', allProducts);
+        
+        // Debug each product's image data
+        allProducts.forEach((product, index) => {
+            console.log(`🔍 Product ${index + 1}:`, {
+                name: product.product_name,
+                image_s3_key: product.image_s3_key,
+                image_url: product.image_url,
+                hasImageUrl: !!product.image_url,
+                imageUrlLength: product.image_url?.length
+            });
+        });
         
         const transformedProducts = allProducts.map(product => ({
             id: product.product_id,
@@ -72,8 +83,13 @@ async function loadProducts() {
             barcode: product.barcode,
             status: product.status || 'pending',
             image: product.image_url || generatePlaceholderImage(product.product_name),
-            created_at: product.created_at
+            created_at: product.created_at,
+            // Keep raw data for debugging
+            raw_image_url: product.image_url,
+            raw_s3_key: product.image_s3_key
         }));
+        
+        console.log('🔍 DEBUG - Transformed products:', transformedProducts);
         
         displayProducts(transformedProducts);
         
@@ -90,7 +106,6 @@ async function loadProducts() {
             </div>
         `;
         
-        // Update stats to 0
         document.getElementById('total-products').textContent = '0';
         document.getElementById('expiring-count').textContent = '0';
         
@@ -124,13 +139,23 @@ function displayProducts(products) {
         return;
     }
     
-    // Display products
-    productList.innerHTML = products.map(product => `
+    // Display products with debug info
+    productList.innerHTML = products.map((product, index) => {
+        console.log(`🔍 Rendering product ${index + 1} with image:`, product.image);
+        
+        return `
         <div class="product-card" data-product-id="${product.id}">
-            <img class="product-image" 
-                 src="${product.image}" 
-                 alt="Product" 
-                 onerror="this.src='${generatePlaceholderImage(product.name)}'">
+            <div style="position: relative;">
+                <img class="product-image" 
+                     src="${product.image}" 
+                     alt="${product.name}"
+                     onload="console.log('✅ Image loaded successfully:', this.src)"
+                     onerror="handleImageError(this, '${product.name}', '${product.raw_image_url}', '${product.raw_s3_key}')"
+                     style="border: 2px solid #e0e0e0;">
+                <div class="debug-info" style="position: absolute; bottom: -20px; left: 0; font-size: 8px; color: #666; max-width: 80px; overflow: hidden;">
+                    ${product.raw_image_url ? 'Has URL' : 'No URL'}
+                </div>
+            </div>
             <div class="product-info">
                 <div class="product-name">${product.name}</div>
                 <div class="product-details">
@@ -141,24 +166,82 @@ function displayProducts(products) {
                 <div class="product-actions">
                     <button class="edit-btn" onclick="editProduct('${product.id}')">✏️ Edit</button>
                     <button class="validate-btn" onclick="validateProduct('${product.id}')">✅ Validate</button>
+                    <button class="debug-btn" onclick="debugImage('${product.raw_image_url}', '${product.raw_s3_key}')" 
+                            style="background: #007aff; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 10px; margin-top: 4px;">
+                        🔍 Debug Image
+                    </button>
                 </div>
             </div>
         </div>
-    `).join('');
+    `;
+    }).join('');
+}
+
+// Enhanced image error handler
+function handleImageError(img, productName, rawImageUrl, rawS3Key) {
+    console.error('❌ Image failed to load:');
+    console.error('  - Image src:', img.src);
+    console.error('  - Product name:', productName);
+    console.error('  - Raw image URL:', rawImageUrl);
+    console.error('  - Raw S3 key:', rawS3Key);
+    
+    // Try to load the S3 URL directly if different
+    if (rawImageUrl && rawImageUrl !== img.src) {
+        console.log('🔄 Trying raw S3 URL:', rawImageUrl);
+        img.src = rawImageUrl;
+        img.onerror = function() {
+            console.error('❌ Raw S3 URL also failed, using placeholder');
+            this.src = generatePlaceholderImage(productName);
+        };
+    } else {
+        console.log('🔄 Using placeholder image');
+        img.src = generatePlaceholderImage(productName);
+    }
+}
+
+// Debug function to test image URLs
+function debugImage(imageUrl, s3Key) {
+    console.log('🔍 DEBUG IMAGE INFO:');
+    console.log('  - Image URL:', imageUrl);
+    console.log('  - S3 Key:', s3Key);
+    
+    if (imageUrl) {
+        // Test if URL is accessible
+        fetch(imageUrl, { method: 'HEAD' })
+            .then(response => {
+                console.log('✅ Image URL is accessible');
+                console.log('  - Status:', response.status);
+                console.log('  - Headers:', [...response.headers.entries()]);
+                
+                // Try opening in new tab
+                const confirm = window.confirm('Image URL seems accessible. Open in new tab?');
+                if (confirm) {
+                    window.open(imageUrl, '_blank');
+                }
+            })
+            .catch(error => {
+                console.error('❌ Image URL is NOT accessible:');
+                console.error('  - Error:', error);
+                console.error('  - This might be a CORS issue or the image doesn\'t exist');
+                
+                tg.showAlert(`Image URL issue: ${error.message}`);
+            });
+    } else {
+        console.log('❌ No image URL provided');
+        tg.showAlert('No image URL found for this product');
+    }
 }
 
 function isExpiringSoon(expiry) {
     if (!expiry || expiry === 'Unknown') return false;
     
     try {
-        // Handle DD/MM/YY format
         const parts = expiry.split('/');
         if (parts.length === 3) {
             const day = parseInt(parts[0]);
-            const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+            const month = parseInt(parts[1]) - 1;
             let year = parseInt(parts[2]);
             
-            // Convert 2-digit year to 4-digit
             if (year < 100) {
                 year += year < 50 ? 2000 : 1900;
             }
@@ -265,7 +348,6 @@ async function validateProduct(productId) {
 }
 
 function openTelegramBot() {
-    // Update with your actual bot username
     tg.openTelegramLink('https://web.telegram.org/k/#@shelfsaver_graciaOve_bot');
     // tg.openTelegramLink('https://t.me/shelfsaver_graciaOve_bot');
 }
@@ -291,11 +373,9 @@ function setupEventListeners() {
         }
     });
     
-    // Set up Telegram main button
     tg.MainButton.setText('Refresh Products');
     tg.MainButton.show();
     tg.MainButton.onClick(loadProducts);
     
-    // Auto-refresh every 30 seconds
     setInterval(loadProducts, 30000);
 }
