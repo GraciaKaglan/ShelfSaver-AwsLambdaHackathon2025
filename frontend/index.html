@@ -12,6 +12,7 @@
         <header class="header">
             <h1>📦 ShelfSaver</h1>
             <div class="user-info">
+                <span>👤</span>
                 <span id="user-name">Loading...</span>
             </div>
         </header>
@@ -28,12 +29,17 @@
                 </div>
             </div>
 
+            <div class="action-buttons">
+                <button class="action-btn bot-btn" onclick="openTelegramBot()">
+                    🤖 Open Bot
+                </button>
+                <button class="action-btn refresh-btn" onclick="loadProducts()">
+                    🔄 Refresh
+                </button>
+            </div>
+
             <div class="product-list" id="product-list">
-                <!-- Products will be loaded here -->
-                <div class="empty-state">
-                    <p>📸 No products scanned yet</p>
-                    <p>Send photos to the bot to get started!</p>
-                </div>
+                <div class="loading">📡 Loading products...</div>
             </div>
         </main>
 
@@ -47,28 +53,3 @@
     <script src="script.js"></script>
 </body>
 </html>
-
-
-<!-- <!DOCTYPE html>
-
-<html lang="en">
-    <head>
-        <title>Product Card</title>
-        <link rel="stylesheet" href="style.css">
-    </head>
-    <body class="product-card">
-        <img class="product-image" src="images/BagGouteuxPouletRoti.jpeg" alt="Product">
-        <div class="product-info">
-            <h3 class="product-name">Baguette le goûteux poulet rôti mayonnaise</h3>
-            <div class="product-details">
-                <div class="quantity-controls">
-                    <button class="quantity-btn">-</button>
-                    <span class="quantity">6</span>
-                    <button class="quantity-btn">+</button>
-                </div>
-                <span class="expiry-date">14/05/24</span>
-            </div>
-        </div>
-        <button class="modify-btn">Modifier</button>
-    </body>
-</html> -->

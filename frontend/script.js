@@ -1,8 +1,24 @@
 // Initialize Telegram WebApp
-const tg = window.Telegram.WebApp;
+const tg = window.Telegram?.WebApp || {
+    ready: () => {},
+    expand: () => {},
+    enableClosingConfirmation: () => {},
+    showAlert: (msg) => alert(msg),
+    MainButton: {
+        setText: () => {},
+        show: () => {},
+        onClick: () => {}
+    },
+    initDataUnsafe: null,
+    openTelegramLink: (url) => window.open(url, '_blank')
+};
 
-// API Configuration - UPDATE THIS WITH YOUR ACTUAL API URL
-const API_BASE_URL = 'https://ifv2owwcx7.execute-api.eu-north-1.amazonaws.com/prod'; // You'll need to create this
+// API Configuration - UPDATE WITH YOUR ACTUAL API URL
+const API_BASE_URL = 'https://ifv2owwcx7.execute-api.eu-north-1.amazonaws.com/prod';
+
+// Global variables
+let currentUserId = 'demo';
+let allProducts = [];
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', function() {
@@ -13,53 +29,46 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 function initializeTelegramApp() {
-    // Initialize Telegram WebApp
     tg.ready();
     tg.expand();
-    
-    // Configure the app
     tg.enableClosingConfirmation();
-    
     console.log('Telegram WebApp initialized');
 }
 
 function loadUserInfo() {
-    // Get user info from Telegram
     const user = tg.initDataUnsafe?.user;
     
     if (user) {
         document.getElementById('user-name').textContent = user.first_name || 'User';
-        // Store user ID for API calls
-        window.currentUserId = user.id;
+        currentUserId = user.id;
     } else {
         document.getElementById('user-name').textContent = 'Demo User';
-        window.currentUserId = 'demo';
+        currentUserId = 'demo';
     }
 }
 
 async function loadProducts() {
     try {
-        // Show loading state
         const productList = document.getElementById('product-list');
-        productList.innerHTML = '<div class="empty-state"><p>📡 Loading products...</p></div>';
+        productList.innerHTML = '<div class="loading">📡 Loading products...</div>';
         
-        // Fetch products from your API
-        const response = await fetch(`${API_BASE_URL}/products?user_id=${window.currentUserId}`);
+        const response = await fetch(`${API_BASE_URL}/products?user_id=${currentUserId}`);
         
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
         }
         
         const data = await response.json();
-        const products = data.products || [];
+        allProducts = data.products || [];
         
-        // Transform data to match our UI format
-        const transformedProducts = products.map(product => ({
+        console.log('Loaded products:', allProducts);
+        
+        const transformedProducts = allProducts.map(product => ({
             id: product.product_id,
             name: product.product_name || 'Unknown Product',
             quantity: product.quantity || 'N/A',
-            expiry: formatDate(product.expiry_date),
-            confidence: product.confidence || 0,
+            expiry: product.expiry_date || 'Unknown',
+            confidence: Math.round(product.confidence || 0),
             barcode: product.barcode,
             status: product.status || 'pending',
             image: product.image_url || generatePlaceholderImage(product.product_name),
@@ -71,53 +80,27 @@ async function loadProducts() {
     } catch (error) {
         console.error('Error loading products:', error);
         
-        // Fallback to demo data if API fails
-        const demoProducts = [
-            {
-                id: 'demo-1',
-                name: 'Demo: Connect to your bot first!',
-                quantity: '1',
-                expiry: '2025-06-25',
-                confidence: 95,
-                status: 'demo',
-                image: generatePlaceholderImage('Demo Product')
-            }
-        ];
+        const productList = document.getElementById('product-list');
+        productList.innerHTML = `
+            <div class="empty-state">
+                <h3>🔌 Connection Issue</h3>
+                <p>Could not load products from the API.</p>
+                <p>Make sure you've scanned some products with the bot first!</p>
+                <p><small>Error: ${error.message}</small></p>
+            </div>
+        `;
         
-        displayProducts(demoProducts);
+        // Update stats to 0
+        document.getElementById('total-products').textContent = '0';
+        document.getElementById('expiring-count').textContent = '0';
         
-        // Show error to user
         tg.showAlert('Could not load products. Make sure to scan some products with the bot first!');
     }
 }
 
-function formatDate(dateString) {
-    if (!dateString) return 'Unknown';
-    
-    // Handle different date formats
-    try {
-        // Try parsing the date
-        const date = new Date(dateString);
-        if (isNaN(date.getTime())) {
-            // If invalid, return original string
-            return dateString;
-        }
-        
-        // Format as DD/MM/YY
-        return date.toLocaleDateString('en-GB', {
-            day: '2-digit',
-            month: '2-digit',
-            year: '2-digit'
-        });
-    } catch (error) {
-        return dateString;
-    }
-}
-
 function generatePlaceholderImage(productName) {
-    // Generate a placeholder image URL
     const firstLetter = (productName || 'P')[0].toUpperCase();
-    return `https://via.placeholder.com/60x60/3390ec/ffffff?text=${firstLetter}`;
+    return `https://via.placeholder.com/80x80/3390ec/ffffff?text=${firstLetter}`;
 }
 
 function displayProducts(products) {
@@ -133,11 +116,9 @@ function displayProducts(products) {
     if (products.length === 0) {
         productList.innerHTML = `
             <div class="empty-state">
-                <p>📸 No products scanned yet</p>
-                <p>Send photos to the bot to get started!</p>
-                <button class="main-btn" onclick="openTelegramBot()" style="margin-top: 15px;">
-                    🤖 Open Bot
-                </button>
+                <h3>📸 No products scanned yet</h3>
+                <p>Send photos to the ShelfSaver bot to get started!</p>
+                <p>Use the "Open Bot" button above to scan your first product.</p>
             </div>
         `;
         return;
@@ -146,12 +127,14 @@ function displayProducts(products) {
     // Display products
     productList.innerHTML = products.map(product => `
         <div class="product-card" data-product-id="${product.id}">
-            <img class="product-image" src="${product.image}" alt="Product" 
+            <img class="product-image" 
+                 src="${product.image}" 
+                 alt="Product" 
                  onerror="this.src='${generatePlaceholderImage(product.name)}'">
             <div class="product-info">
                 <div class="product-name">${product.name}</div>
                 <div class="product-details">
-                    <span class="quantity">${product.quantity}</span>
+                    ${product.quantity !== 'N/A' ? `<span class="quantity">${product.quantity}</span>` : ''}
                     <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
                     ${product.confidence ? `<span class="confidence">${product.confidence}%</span>` : ''}
                 </div>
@@ -168,11 +151,26 @@ function isExpiringSoon(expiry) {
     if (!expiry || expiry === 'Unknown') return false;
     
     try {
-        const today = new Date();
-        const expiryDate = new Date(expiry);
-        const diffTime = expiryDate - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        return diffDays <= 3 && diffDays >= 0;
+        // Handle DD/MM/YY format
+        const parts = expiry.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1; // JS months are 0-indexed
+            let year = parseInt(parts[2]);
+            
+            // Convert 2-digit year to 4-digit
+            if (year < 100) {
+                year += year < 50 ? 2000 : 1900;
+            }
+            
+            const expiryDate = new Date(year, month, day);
+            const today = new Date();
+            const diffTime = expiryDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            return diffDays <= 3 && diffDays >= 0;
+        }
+        return false;
     } catch (error) {
         return false;
     }
@@ -182,48 +180,58 @@ function getExpiryClass(expiry) {
     if (!expiry || expiry === 'Unknown') return 'unknown';
     
     try {
-        const today = new Date();
-        const expiryDate = new Date(expiry);
-        const diffTime = expiryDate - today;
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        if (diffDays < 0) return 'expired';
-        if (diffDays <= 3) return 'warning';
-        return 'safe';
+        const parts = expiry.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1;
+            let year = parseInt(parts[2]);
+            
+            if (year < 100) {
+                year += year < 50 ? 2000 : 1900;
+            }
+            
+            const expiryDate = new Date(year, month, day);
+            const today = new Date();
+            const diffTime = expiryDate - today;
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+            
+            if (diffDays < 0) return 'expired';
+            if (diffDays <= 3) return 'warning';
+            return 'safe';
+        }
+        return 'unknown';
     } catch (error) {
         return 'unknown';
     }
 }
 
 async function editProduct(productId) {
-    // Get current product data
     try {
-        const response = await fetch(`${API_BASE_URL}/products/${productId}`);
-        const product = await response.json();
+        const product = allProducts.find(p => p.product_id === productId);
+        if (!product) {
+            tg.showAlert('Product not found!');
+            return;
+        }
         
-        // Create edit modal/form (simplified for now)
         const newName = prompt('Edit product name:', product.product_name);
         const newExpiry = prompt('Edit expiry date (DD/MM/YY):', product.expiry_date);
         const newQuantity = prompt('Edit quantity:', product.quantity);
         
         if (newName !== null || newExpiry !== null || newQuantity !== null) {
-            const updateData = {};
-            if (newName !== null) updateData.product_name = newName;
-            if (newExpiry !== null) updateData.expiry_date = newExpiry;
-            if (newQuantity !== null) updateData.quantity = newQuantity;
-            updateData.status = 'validated';
+            const updateData = { status: 'validated' };
+            if (newName !== null && newName !== product.product_name) updateData.product_name = newName;
+            if (newExpiry !== null && newExpiry !== product.expiry_date) updateData.expiry_date = newExpiry;
+            if (newQuantity !== null && newQuantity !== product.quantity) updateData.quantity = newQuantity;
             
             const updateResponse = await fetch(`${API_BASE_URL}/products/${productId}`, {
                 method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updateData)
             });
             
             if (updateResponse.ok) {
                 tg.showAlert('Product updated successfully! ✅');
-                loadProducts(); // Reload products
+                loadProducts();
             } else {
                 throw new Error('Update failed');
             }
@@ -239,15 +247,13 @@ async function validateProduct(productId) {
     try {
         const updateResponse = await fetch(`${API_BASE_URL}/products/${productId}`, {
             method: 'PUT',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'validated' })
         });
         
         if (updateResponse.ok) {
             tg.showAlert('Product validated! ✅');
-            loadProducts(); // Reload products
+            loadProducts();
         } else {
             throw new Error('Validation failed');
         }
@@ -259,25 +265,26 @@ async function validateProduct(productId) {
 }
 
 function openTelegramBot() {
-    // Open the bot in Telegram
-    tg.openTelegramLink('https://web.telegram.org/k/#@shelfsaver_graciaOve_bot'); // Update with your bot username
+    // Update with your actual bot username
+    tg.openTelegramLink('https://web.telegram.org/k/#@shelfsaver_graciaOve_bot');
+    // tg.openTelegramLink('https://t.me/shelfsaver_graciaOve_bot');
 }
 
 function setupEventListeners() {
-    // Main button click
     document.getElementById('validate-btn').addEventListener('click', async function() {
         try {
-            // Validate all pending products
-            const response = await fetch(`${API_BASE_URL}/products?user_id=${window.currentUserId}`);
-            const data = await response.json();
-            const pendingProducts = data.products.filter(p => p.status === 'pending');
+            const pendingProducts = allProducts.filter(p => p.status === 'pending');
+            
+            if (pendingProducts.length === 0) {
+                tg.showAlert('No pending products to validate!');
+                return;
+            }
             
             for (const product of pendingProducts) {
                 await validateProduct(product.product_id);
             }
             
             tg.showAlert(`Validated ${pendingProducts.length} products! ✅`);
-            loadProducts();
             
         } catch (error) {
             tg.showAlert('Could not validate all products. Please try again.');
@@ -287,126 +294,8 @@ function setupEventListeners() {
     // Set up Telegram main button
     tg.MainButton.setText('Refresh Products');
     tg.MainButton.show();
-    tg.MainButton.onClick(function() {
-        loadProducts();
-    });
+    tg.MainButton.onClick(loadProducts);
     
-    // Refresh every 30 seconds
+    // Auto-refresh every 30 seconds
     setInterval(loadProducts, 30000);
 }
-
-
-// // Initialize Telegram WebApp
-// const tg = window.Telegram.WebApp;
-
-// // Initialize the app
-// document.addEventListener('DOMContentLoaded', function() {
-//     initializeTelegramApp();
-//     loadUserInfo();
-//     loadProducts();
-//     setupEventListeners();
-// });
-
-// function initializeTelegramApp() {
-//     // Initialize Telegram WebApp
-//     tg.ready();
-//     tg.expand();
-    
-//     // Configure the app
-//     tg.enableClosingConfirmation();
-    
-//     console.log('Telegram WebApp initialized');
-// }
-
-// function loadUserInfo() {
-//     // Get user info from Telegram
-//     const user = tg.initDataUnsafe?.user;
-    
-//     if (user) {
-//         document.getElementById('user-name').textContent = user.first_name || 'User';
-//     } else {
-//         document.getElementById('user-name').textContent = 'Demo User';
-//     }
-// }
-
-// function loadProducts() {
-//     // Mock data for now - later we'll connect to your Lambda API
-//     const mockProducts = [
-//         {
-//             id: '1',
-//             name: 'Sample Product',
-//             quantity: 5,
-//             expiry: '2024-06-25',
-//             image: 'https://via.placeholder.com/60x60'
-//         }
-//     ];
-    
-//     displayProducts(mockProducts);
-// }
-
-// function displayProducts(products) {
-//     const productList = document.getElementById('product-list');
-//     const totalProducts = document.getElementById('total-products');
-//     const expiringCount = document.getElementById('expiring-count');
-    
-//     // Update stats
-//     totalProducts.textContent = products.length;
-//     expiringCount.textContent = products.filter(p => isExpiringSoon(p.expiry)).length;
-    
-//     if (products.length === 0) {
-//         productList.innerHTML = `
-//             <div class="empty-state">
-//                 <p>📸 No products scanned yet</p>
-//                 <p>Send photos to the bot to get started!</p>
-//             </div>
-//         `;
-//         return;
-//     }
-    
-//     // Display products
-//     productList.innerHTML = products.map(product => `
-//         <div class="product-card">
-//             <img class="product-image" src="${product.image}" alt="Product" onerror="this.style.display='none'">
-//             <div class="product-info">
-//                 <div class="product-name">${product.name}</div>
-//                 <div class="product-details">
-//                     <span class="quantity">${product.quantity}</span>
-//                     <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
-//                 </div>
-//             </div>
-//         </div>
-//     `).join('');
-// }
-
-// function isExpiringSoon(expiry) {
-//     const today = new Date();
-//     const expiryDate = new Date(expiry);
-//     const diffTime = expiryDate - today;
-//     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-//     return diffDays <= 3;
-// }
-
-// function getExpiryClass(expiry) {
-//     const today = new Date();
-//     const expiryDate = new Date(expiry);
-//     const diffTime = expiryDate - today;
-//     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    
-//     if (diffDays < 0) return 'expired';
-//     if (diffDays <= 3) return 'warning';
-//     return 'safe';
-// }
-
-// function setupEventListeners() {
-//     // Main button click
-//     document.getElementById('validate-btn').addEventListener('click', function() {
-//         tg.showAlert('Products validated! ✅');
-//     });
-    
-//     // Set up Telegram main button
-//     tg.MainButton.setText('Validate Products');
-//     tg.MainButton.show();
-//     tg.MainButton.onClick(function() {
-//         tg.showAlert('All products validated! ✅');
-//     });
-// }
