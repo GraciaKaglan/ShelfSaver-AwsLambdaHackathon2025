@@ -309,5 +309,5 @@ function setupEventListeners() {
     tg.MainButton.show();
     tg.MainButton.onClick(loadProducts);
     
-    setInterval(loadProducts, 30000);
+    // setInterval(loadProducts, 30000);
 }
