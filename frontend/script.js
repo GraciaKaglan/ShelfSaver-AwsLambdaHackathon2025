@@ -261,12 +261,17 @@ async function validateProduct(productId) {
             body: JSON.stringify({ status: 'validated' })
         });
         
+        console.log('✅ Update response status:', updateResponse.status);
+
         if (updateResponse.ok) {
             if (typeof alert !== 'undefined') alert('Product validated! ✅');
             // tg.showAlert('Product validated! ✅');
-            loadProducts();
+            await loadProducts();
         } else {
-            throw new Error('Validation failed');
+            const errorText = await updateResponse.text();
+            console.error('❌ Validation failed:', errorText);
+            throw new Error(`Validation failed: ${updateResponse.status}`);
+            // throw new Error('Validation failed');
         }
         
     } catch (error) {
@@ -283,27 +288,64 @@ function openTelegramBot() {
 
 function setupEventListeners() {
     document.getElementById('validate-btn').addEventListener('click', async function() {
-        try {
-            const pendingProducts = allProducts.filter(p => p.status === 'pending');
-            
-            if (pendingProducts.length === 0) {
-                if (typeof alert !== 'undefined') alert('No pending products to validate!');
-                // tg.showAlert('No pending products to validate!');
-                return;
-            }
-            
-            for (const product of pendingProducts) {
-                await validateProduct(product.product_id);
-            }
-            
-            if (typeof alert !== 'undefined') alert(`Validated ${pendingProducts.length} products! ✅`);
-            // tg.showAlert(`Validated ${pendingProducts.length} products! ✅`);
-            
-        } catch (error) {
-            if (typeof alert !== 'undefined') alert('Could not validate all products. Please try again.');
-            // tg.showAlert('Could not validate all products. Please try again.');
+    try {
+        console.log('🔄 Starting bulk validation...');
+        const pendingProducts = allProducts.filter(p => p.status === 'pending');
+        
+        if (pendingProducts.length === 0) {
+            if (typeof alert !== 'undefined') alert('No pending products to validate!');
+            return;
         }
-    });
+        
+        console.log(`📝 Found ${pendingProducts.length} pending products`);
+        
+        // Validate one by one to avoid overwhelming the API
+        for (let i = 0; i < pendingProducts.length; i++) {
+            const product = pendingProducts[i];
+            console.log(`🔄 Validating ${i + 1}/${pendingProducts.length}: ${product.product_id}`);
+            await validateProduct(product.product_id);
+            
+            // Small delay to avoid rate limiting
+            await new Promise(resolve => setTimeout(resolve, 200));
+        }
+        
+        if (typeof alert !== 'undefined') alert(`Validated ${pendingProducts.length} products! ✅`);
+        
+    } catch (error) {
+        console.error('❌ Bulk validation error:', error);
+        if (typeof alert !== 'undefined') alert('Could not validate all products. Please try again.');
+    }
+});
+
+// document.getElementById('validate-btn').addEventListener('click', async function() {
+//     try {
+//         console.log('🔄 Starting bulk validation...');
+//         const pendingProducts = allProducts.filter(p => p.status === 'pending');
+        
+//         if (pendingProducts.length === 0) {
+//             if (typeof alert !== 'undefined') alert('No pending products to validate!');
+//             return;
+//         }
+        
+//         console.log(`📝 Found ${pendingProducts.length} pending products`);
+        
+//         // Validate one by one to avoid overwhelming the API
+//         for (let i = 0; i < pendingProducts.length; i++) {
+//             const product = pendingProducts[i];
+//             console.log(`🔄 Validating ${i + 1}/${pendingProducts.length}: ${product.product_id}`);
+//             await validateProduct(product.product_id);
+            
+//             // Small delay to avoid rate limiting
+//             await new Promise(resolve => setTimeout(resolve, 200));
+//         }
+        
+//         if (typeof alert !== 'undefined') alert(`Validated ${pendingProducts.length} products! ✅`);
+        
+//     } catch (error) {
+//         console.error('❌ Bulk validation error:', error);
+//         if (typeof alert !== 'undefined') alert('Could not validate all products. Please try again.');
+//     }
+// });
     
     tg.MainButton.setText('Refresh Products');
     tg.MainButton.show();
