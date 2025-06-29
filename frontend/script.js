@@ -71,7 +71,7 @@ async function loadProducts() {
             confidence: Math.round(product.confidence || 0),
             barcode: product.barcode,
             status: product.status || 'pending',
-            image: generateWorkingPlaceholderImage(product.product_name),
+            image: product.image_url || `data:image/svg+xml,%3Csvg width="80" height="80" xmlns="http://www.w3.org/2000/svg"%3E%3Crect width="80" height="80" fill="%233390ec" rx="12"/%3E%3Ctext x="40" y="45" text-anchor="middle" fill="white" font-size="24" font-family="Arial"%3E📦%3C/text%3E%3C/svg%3E`,
             created_at: product.created_at
         }));
         
@@ -93,7 +93,9 @@ async function loadProducts() {
         document.getElementById('total-products').textContent = '0';
         document.getElementById('expiring-count').textContent = '0';
         
-        tg.showAlert('Could not load products. Make sure to scan some products with the bot first!');
+        if (typeof alert !== 'undefined') alert('Could not load products. Make sure to scan some products with the bot first!');
+
+        // tg.showAlert('Could not load products. Make sure to scan some products with the bot first!');
     }
 }
 
@@ -101,28 +103,13 @@ function generateWorkingPlaceholderImage(productName) {
     const name = productName || 'Product';
     const firstLetter = name[0].toUpperCase();
     
-    // Use different emoji based on product name
-    const emojis = ['📦', '🥫', '🍞', '🥛', '🧀', '🥩', '🍎', '🥕', '🍕', '🍔'];
-    const emojiIndex = name.length % emojis.length;
-    const emoji = emojis[emojiIndex];
-    
-    // Create SVG data URL (works offline and with any network)
-    const colors = [
-        '#3390ec', '#34c759', '#ff9500', '#ff3b30', 
-        '#007aff', '#ff2d92', '#5856d6', '#ff8c00'
-    ];
+    // Safe colors and emojis
+    const colors = ['3390ec', '34c759', 'ff9500', 'ff3b30', '007aff', 'ff2d92'];
     const colorIndex = name.length % colors.length;
     const bgColor = colors[colorIndex];
     
-    const svg = `
-        <svg width="80" height="80" xmlns="http://www.w3.org/2000/svg">
-            <rect width="80" height="80" fill="${bgColor}" rx="12"/>
-            <text x="40" y="30" text-anchor="middle" fill="white" font-size="20" font-family="Arial">${firstLetter}</text>
-            <text x="40" y="55" text-anchor="middle" font-size="24">${emoji}</text>
-        </svg>
-    `;
-    
-    return 'data:image/svg+xml;base64,' + btoa(svg);
+    // Use simple data URL without btoa to avoid encoding issues
+    return `data:image/svg+xml,%3Csvg width="80" height="80" xmlns="http://www.w3.org/2000/svg"%3E%3Crect width="80" height="80" fill="%23${bgColor}" rx="12"/%3E%3Ctext x="40" y="45" text-anchor="middle" fill="white" font-size="24" font-family="Arial"%3E${firstLetter}%3C/text%3E%3C/svg%3E`;
 }
 
 function displayProducts(products) {
@@ -229,7 +216,8 @@ async function editProduct(productId) {
     try {
         const product = allProducts.find(p => p.product_id === productId);
         if (!product) {
-            tg.showAlert('Product not found!');
+            if (typeof alert !== 'undefined') alert('Product not found!');
+            // tg.showAlert('Product not found!');
             return;
         }
         
@@ -250,7 +238,8 @@ async function editProduct(productId) {
             });
             
             if (updateResponse.ok) {
-                tg.showAlert('Product updated successfully! ✅');
+                if (typeof alert !== 'undefined') alert('Product updated successfully! ✅');
+                // tg.showAlert('Product updated successfully! ✅');
                 loadProducts();
             } else {
                 throw new Error('Update failed');
@@ -259,7 +248,8 @@ async function editProduct(productId) {
         
     } catch (error) {
         console.error('Edit error:', error);
-        tg.showAlert('Could not edit product. Please try again.');
+        if (typeof alert !== 'undefined') alert('Could not edit product. Please try again.');
+        // tg.showAlert('Could not edit product. Please try again.');
     }
 }
 
@@ -272,7 +262,8 @@ async function validateProduct(productId) {
         });
         
         if (updateResponse.ok) {
-            tg.showAlert('Product validated! ✅');
+            if (typeof alert !== 'undefined') alert('Product validated! ✅');
+            // tg.showAlert('Product validated! ✅');
             loadProducts();
         } else {
             throw new Error('Validation failed');
@@ -280,7 +271,8 @@ async function validateProduct(productId) {
         
     } catch (error) {
         console.error('Validation error:', error);
-        tg.showAlert('Could not validate product. Please try again.');
+        if (typeof alert !== 'undefined') alert('Could not validate product. Please try again.');
+        // tg.showAlert('Could not validate product. Please try again.');
     }
 }
 
@@ -295,7 +287,8 @@ function setupEventListeners() {
             const pendingProducts = allProducts.filter(p => p.status === 'pending');
             
             if (pendingProducts.length === 0) {
-                tg.showAlert('No pending products to validate!');
+                if (typeof alert !== 'undefined') alert('No pending products to validate!');
+                // tg.showAlert('No pending products to validate!');
                 return;
             }
             
@@ -303,10 +296,12 @@ function setupEventListeners() {
                 await validateProduct(product.product_id);
             }
             
-            tg.showAlert(`Validated ${pendingProducts.length} products! ✅`);
+            if (typeof alert !== 'undefined') alert(`Validated ${pendingProducts.length} products! ✅`);
+            // tg.showAlert(`Validated ${pendingProducts.length} products! ✅`);
             
         } catch (error) {
-            tg.showAlert('Could not validate all products. Please try again.');
+            if (typeof alert !== 'undefined') alert('Could not validate all products. Please try again.');
+            // tg.showAlert('Could not validate all products. Please try again.');
         }
     });
     
