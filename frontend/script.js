@@ -305,51 +305,46 @@ function setupEventListeners() {
             console.log(`🔄 Validating ${i + 1}/${pendingProducts.length}: ${product.product_id}`);
             await validateProduct(product.product_id);
             
+            await validateProductSilently(product.product_id);
+
             // Small delay to avoid rate limiting
             await new Promise(resolve => setTimeout(resolve, 200));
         }
         
-        if (typeof alert !== 'undefined') alert(`Validated ${pendingProducts.length} products! ✅`);
+        if (typeof alert !== 'undefined') alert(`🎉 Successfully validated ${pendingProducts.length} products! ✅`);
         
+        // Refresh the list
+        await loadProducts();
+
     } catch (error) {
         console.error('❌ Bulk validation error:', error);
         if (typeof alert !== 'undefined') alert('Could not validate all products. Please try again.');
     }
 });
-
-// document.getElementById('validate-btn').addEventListener('click', async function() {
-//     try {
-//         console.log('🔄 Starting bulk validation...');
-//         const pendingProducts = allProducts.filter(p => p.status === 'pending');
-        
-//         if (pendingProducts.length === 0) {
-//             if (typeof alert !== 'undefined') alert('No pending products to validate!');
-//             return;
-//         }
-        
-//         console.log(`📝 Found ${pendingProducts.length} pending products`);
-        
-//         // Validate one by one to avoid overwhelming the API
-//         for (let i = 0; i < pendingProducts.length; i++) {
-//             const product = pendingProducts[i];
-//             console.log(`🔄 Validating ${i + 1}/${pendingProducts.length}: ${product.product_id}`);
-//             await validateProduct(product.product_id);
-            
-//             // Small delay to avoid rate limiting
-//             await new Promise(resolve => setTimeout(resolve, 200));
-//         }
-        
-//         if (typeof alert !== 'undefined') alert(`Validated ${pendingProducts.length} products! ✅`);
-        
-//     } catch (error) {
-//         console.error('❌ Bulk validation error:', error);
-//         if (typeof alert !== 'undefined') alert('Could not validate all products. Please try again.');
-//     }
-// });
     
     tg.MainButton.setText('Refresh Products');
     tg.MainButton.show();
     tg.MainButton.onClick(loadProducts);
     
     // setInterval(loadProducts, 30000);
+}
+
+async function validateProductSilently(productId) {
+    try {
+        const updateResponse = await fetch(`${API_BASE_URL}/products/${productId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'validated' })
+        });
+        
+        if (!updateResponse.ok) {
+            throw new Error(`Validation failed: ${updateResponse.status}`);
+        }
+        
+        return true;
+        
+    } catch (error) {
+        console.error('Silent validation error:', error);
+        return false;
+    }
 }
