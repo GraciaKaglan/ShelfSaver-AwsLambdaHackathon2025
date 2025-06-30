@@ -6,7 +6,7 @@ import boto3
 import urllib.parse
 import urllib.request
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta, date
 
 # Initialize AWS clients for PARIS REGION
 textract = boto3.client('textract', region_name='eu-west-3')
@@ -32,19 +32,18 @@ REGEX_CONFIG = {
     "parsing": {
         "regex_patterns": {
             "expiry_date": [
-                r"(?i)(exp|expir|use by|best before|à consommer avant)[^\d]*([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})",
+                r"DLC : (..?/..?/..)",
                 r"([0-9]{1,2}[/\-\.][0-9]{1,2}[/\-\.][0-9]{2,4})"
             ],
             "product_name": [
-                r"^([A-Z][A-Za-z\s]+)$",
+                r"([A-Z ]{5,})",
                 r"([A-Z][A-Za-z\s]{3,30})"
             ],
             "quantity": [
-                r"(\d+)\s*(g|kg|ml|l|pcs|pieces)",
-                r"quantity[:\s]*(\d+)"
+                r"x|X([0-9])"
             ],
             "barcode": [
-                r"(\d{13})",
+                r"(\(01\)[0-9]+\(17\)[0-9]+\(10\)[0-9]+)",
                 r"(\d{8})"
             ]
         }
@@ -320,18 +319,31 @@ def update_product(product_id, event, headers):
         # Update product
         update_expression = []
         expression_values = {}
+        expression_names = {}
         
         for key, value in body.items():
-            if key != 'product_id':  # Don't update the primary key
-                update_expression.append(f"{key} = :{key}")
-                expression_values[f":{key}"] = value
-        
+            if key != 'product_id':
+                if key == 'status':
+                    # Handle reserved keyword 'status'
+                    update_expression.append(f"#status = :status")
+                    expression_values[':status'] = value
+                    expression_names['#status'] = 'status'
+                else:
+                    update_expression.append(f"{key} = :{key}")
+                    expression_values[f":{key}"] = value
+
         if update_expression:
-            table.update_item(
-                Key={'product_id': product_id},
-                UpdateExpression='SET ' + ', '.join(update_expression),
-                ExpressionAttributeValues=expression_values
-            )
+            update_params = {
+                'Key': {'product_id': product_id},
+                'UpdateExpression': 'SET ' + ', '.join(update_expression),
+                'ExpressionAttributeValues': expression_values
+            }
+            
+            # Add ExpressionAttributeNames only if we have reserved keywords
+            if expression_names:
+                update_params['ExpressionAttributeNames'] = expression_names
+            
+            table.update_item(**update_params)
         
         print(f"✅ Product {product_id} updated successfully")
         
@@ -359,6 +371,94 @@ def handle_telegram_webhook(event, context):
             return {'statusCode': 500, 'body': 'Bot token not configured'}
 
         body = json.loads(event.get('body', '{}'))
+        
+        # 🔔 ADD NOTIFICATION HANDLING HERE
+        if body.get('notification_test'):
+            print("🔔 Notification test triggered via webhook")
+            user_id = body.get('user_id', 'demo')
+            
+            try:
+                # Get REAL expiring products from database
+                response = table.scan(
+                    FilterExpression=boto3.dynamodb.conditions.Attr('user_id').eq(str(user_id))
+                )
+                
+                products = response['Items']
+                expiring_products = []
+                
+                # Check which products are actually expiring
+                today = date.today()
+                
+                for product in products:
+                    expiry_str = product.get('expiry_date', '')
+                    if expiry_str and expiry_str != 'Unknown':
+                        try:
+                            # Parse DD/MM/YY format
+                            parts = expiry_str.split('/')
+                            if len(parts) == 3:
+                                day = int(parts[0])
+                                month = int(parts[1])
+                                year = int(parts[2])
+                                
+                                # Convert 2-digit year to 4-digit
+                                if year < 100:
+                                    year += 2000 if year < 50 else 1900
+                                
+                                expiry_date = date(year, month, day)
+                                days_until_expiry = (expiry_date - today).days
+                                
+                                # Include products expiring in next 3 days
+                                if 0 <= days_until_expiry <= 3:
+                                    expiring_products.append({
+                                        'name': product.get('product_name', 'Unknown'),
+                                        'days': days_until_expiry
+                                    })
+                                    
+                        except Exception as e:
+                            print(f"Date parsing error: {e}")
+                            continue
+                
+                # Build smart notification message
+                if len(expiring_products) == 0:
+                    notification_text = f"🔔 ShelfSaver Daily Check ✅\n\n🎉 Great news! No products are expiring soon.\n🍽️ Your food inventory looks good!"
+                else:
+                    notification_text = f"🔔 ShelfSaver Alert! ⚠️\n\n📅 You have {len(expiring_products)} product(s) expiring soon:\n\n"
+                    
+                    for product in expiring_products[:5]:  # Limit to 5 products
+                        if product['days'] == 0:
+                            notification_text += f"🚨 {product['name']} (expires TODAY!)\n"
+                        elif product['days'] == 1:
+                            notification_text += f"⚠️ {product['name']} (expires tomorrow)\n"
+                        else:
+                            notification_text += f"📅 {product['name']} (expires in {product['days']} days)\n"
+                    
+                    notification_text += f"\n🍽️ Check your ShelfSaver app to avoid food waste!"
+                
+                send_message(bot_token, user_id, notification_text)
+                print(f"✅ Smart notification sent: {len(expiring_products)} expiring products")
+                
+                return {
+                    'statusCode': 200,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Headers': 'Content-Type',
+                        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+                    },
+                    'body': json.dumps({'message': 'Smart notification sent successfully!'})
+                }
+                
+            except Exception as e:
+                print(f"❌ Smart notification failed: {e}")
+                return {
+                    'statusCode': 500,
+                    'headers': {
+                        'Access-Control-Allow-Origin': '*',
+                        'Access-Control-Allow-Headers': 'Content-Type',
+                        'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS'
+                    },
+                    'body': json.dumps({'error': 'Failed to send notification'})
+                }
+
         message = body.get('message', {})
         chat_id = message.get('chat', {}).get('id')
         text = message.get('text', '')
@@ -389,6 +489,9 @@ def handle_telegram_webhook(event, context):
                     # Send web app link
                     webapp_text = "🌐 Open ShelfSaver Web App:\nhttps://graciakaglan.github.io/ShelfSaver-AwsLambdaHackathon2025/frontend/"
                     send_message(bot_token, chat_id, webapp_text)
+                elif text.lower() == '/health':
+                    send_message(bot_token, chat_id, "✅ Webhook is healthy and connected!")
+                    print("🏥 Health check performed")
                 else:
                     send_message(bot_token, chat_id, "📸 Send a product photo for analysis!")
     
@@ -712,12 +815,11 @@ def send_structured_product_result(bot_token, chat_id, result):
             url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
             button_data = {
                 'chat_id': chat_id,
-                'text': "Choose an action:",
+                'text': "🌐 Your ShelfSaver Mini App is ready!\n\nTap the button below to view, validate and edit your scanned products:",
                 'reply_markup': {
                     'inline_keyboard': [
                         [
-                            {'text': '✅ Accept', 'callback_data': f'accept_{result["file_id"][:20]}'},
-                            {'text': '✏️ Edit', 'callback_data': f'edit_{result["file_id"][:20]}'}
+                            {'text': '📦 Open ShelfSaver App', 'web_app': {'url': 'https://graciakaglan.github.io/ShelfSaver-AwsLambdaHackathon2025/frontend/'}}
                         ]
                     ]
                 }
@@ -728,7 +830,7 @@ def send_structured_product_result(bot_token, chat_id, result):
                                         headers={'Content-Type': 'application/json'},
                                         method='POST')
             urllib.request.urlopen(req)
-            print("✅ Buttons sent successfully")
+            print("✅ Web app button sent successfully")
             
         except Exception as e:
             print(f"⚠️ Buttons failed but main message worked: {e}")
