@@ -22,7 +22,7 @@ Small businesses waste **$1,600+ annually** on expired products due to manual pa
 
 ## 🎬 **Live Demo**
 
-[**→ Watch 3-Minute Demo Video**](YOUR_VIDEO_LINK_HERE)
+[**→ Watch 3-Minute Demo Video**](https://www.loom.com/share/088bdf3911274a35a1789ccfe9ebaf0d?sid=8ea84cc1-2272-46b2-94ed-99054a227dad)
 
 **Try it yourself:**
 1. Message [@shelfsaver_graciaOve_bot](https://t.me/shelfsaver_graciaOve_bot) on Telegram
@@ -69,9 +69,152 @@ Small businesses waste **$1,600+ annually** on expired products due to manual pa
                                         ↓
 🌐 Web Dashboard ← 📲 Smart Notifications
 ```
+## 🔧 **How to Build This Yourself**
 
-**Multi-region deployment** ensures <200ms response times globally.
+### **Step 1: Create Telegram Bot**
+1. Message [@BotFather](https://t.me/botfather) on Telegram
+2. Send `/newbot` and follow prompts
+3. Save your bot token (looks like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`)
+4. Send `/setcommands` to BotFather and add:
+   ```
+   help - Show bot commands
+   dashboard - Open web dashboard
+   test - Send test notification
+   ```
 
+### **Step 2: Set Up AWS Services**
+
+**DynamoDB Table:**
+1. Go to DynamoDB → Create table
+2. Table name: `shelfsaver-products`
+3. Partition key: `id` (String)
+4. Leave other settings default
+
+**S3 Bucket:**
+1. Go to S3 → Create bucket
+2. Name: `shelfsaver-images-{random-suffix}`
+3. Region: `eu-west-3` (Paris)
+4. Keep default settings
+
+**Lambda Function:**
+1. Go to Lambda → Create function
+2. Runtime: Python 3.9
+3. Set environment variables:
+   - `TELEGRAM_BOT_TOKEN`: Your bot token from Step 1
+   - `S3_BUCKET_NAME`: Your S3 bucket name
+   - `DYNAMODB_TABLE`: `shelfsaver-products`
+4. Add these IAM permissions:
+   - `AmazonS3FullAccess`
+   - `AmazonDynamoDBFullAccess`
+   - `AmazonTextractFullAccess`
+
+### **Step 3: Core Lambda Code Structure**
+Your main function should handle:
+- **Photo processing**: Download from Telegram → S3 → Textract → Parse → DynamoDB
+- **Webhook management**: Telegram updates and API calls
+- **Notifications**: Daily expiry checks and alerts
+
+**Key regex patterns for French products:**
+```python
+expiry_patterns = [
+    r'(?i)(à consommer avant|exp|dlc).*?(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.](?:\d{2}|\d{4}))',
+    r'(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.](?:\d{2}|\d{4}))',
+]
+```
+
+### **Step 4: Set Up API Gateway**
+1. Create new REST API
+2. Create resource `/webhook`
+3. Add POST method → Integration with your Lambda
+4. Enable CORS for web dashboard
+5. Deploy API and save the endpoint URL
+
+### **Step 5: Configure Telegram Webhook**
+```python
+import requests
+
+def set_webhook():
+    bot_token = "YOUR_BOT_TOKEN"
+    webhook_url = "YOUR_API_GATEWAY_URL/webhook"
+    
+    url = f"https://api.telegram.org/bot{bot_token}/setWebhook"
+    data = {"url": webhook_url}
+    
+    response = requests.post(url, json=data)
+    print(response.json())
+```
+
+**Add Health Check Command in Lambda:**
+```python
+def handle_telegram_webhook(event, context):
+    body = json.loads(event.get('body', '{}'))
+    message = body.get('message', {})
+    text = message.get('text', '')
+    chat_id = message.get('chat', {}).get('id')
+    
+    if text == '/health':
+        # Test webhook connectivity
+        health_message = "✅ ShelfSaver Bot is ONLINE!\n\n"
+        health_message += "🔗 Webhook: Connected\n"
+        health_message += "🤖 Lambda: Running\n"
+        health_message += "📊 Database: Accessible\n"
+        health_message += "🧠 Textract: Ready\n\n"
+        health_message += "Try sending a product photo!"
+        
+        send_message(bot_token, chat_id, health_message)
+        return {'statusCode': 200, 'body': 'Health check sent'}
+```
+
+### **Step 6: Build Web Dashboard**
+Create a simple HTML page that:
+- Fetches products from your API Gateway
+- Shows expiry alerts with color coding
+- Provides notification testing
+- Host on GitHub Pages or any static hosting
+
+### **Step 7: Testing & Debugging**
+
+**First, test basic connectivity:**
+1. **Send `/health` to your bot** - Should get immediate response
+2. **Send a product photo** to test full pipeline
+3. **Check web dashboard** for data
+4. **Test notifications** using dashboard button
+
+**If bot doesn't respond to `/health`:**
+
+**Option 1: Reset webhook via browser**
+```
+https://api.telegram.org/bot{YOUR_BOT_TOKEN}/setWebhook?url={YOUR_API_GATEWAY_URL}/webhook
+```
+Replace `{YOUR_BOT_TOKEN}` and `{YOUR_API_GATEWAY_URL}` with your actual values.
+
+**Option 2: Check webhook status**
+```
+https://api.telegram.org/bot{YOUR_BOT_TOKEN}/getWebhookInfo
+```
+This shows if webhook is set correctly and any errors.
+
+**Option 3: Delete webhook (if needed)**
+```
+https://api.telegram.org/bot{YOUR_BOT_TOKEN}/deleteWebhook
+```
+Then set it again with Option 1.
+
+**Common Issues & Solutions:**
+- **No `/health` response**: Webhook broken → Reset using Option 1
+- **Webhook timeout errors**: Check CloudWatch logs → Increase Lambda timeout to 30 seconds
+- **OCR failures**: Check CloudWatch logs for Textract errors
+- **Date parsing errors**: Verify regex patterns match your product formats
+- **Lambda cold starts**: First request might be slow, subsequent ones fast
+
+## 💡 **Pro Tips**
+* **Date parsing**: Handle both DD/MM/YY and DD/MM/YYYY formats
+* **Error handling**: Always have fallbacks for OCR failures  
+* **Multi-region**: Use Paris for images (closer to EU users)
+* **Confidence scoring**: Weight expiry dates higher than other fields
+* **Debugging workflow**: `/health` → reset webhook → check CloudWatch logs
+* **Webhook reset**: Use browser URL method when bot stops responding
+* **Lambda timeouts**: Set timeout to 30+ seconds for Textract processing
 ## 🎯 **Business Impact**
 
 **Before ShelfSaver:**
