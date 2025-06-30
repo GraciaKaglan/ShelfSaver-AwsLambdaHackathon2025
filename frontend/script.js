@@ -373,13 +373,29 @@ async function sendTestNotification() {
     try {
         console.log('🔔 Sending test notification...');
         
-        const response = await fetch(`${API_BASE_URL}/send-notification`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                user_id: currentUserId 
-            })
-        });
+        // Try the dedicated endpoint first
+        let response;
+        try {
+            response = await fetch(`${API_BASE_URL}/send-notification`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    user_id: currentUserId 
+                })
+            });
+        } catch (corsError) {
+            console.log('📧 Dedicated endpoint failed, trying webhook route...');
+            
+            // Fallback: use webhook endpoint with special notification flag
+            response = await fetch(`${API_BASE_URL}/webhook`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    notification_test: true,
+                    user_id: currentUserId 
+                })
+            });
+        }
         
         if (response.ok) {
             if (typeof alert !== 'undefined') {
