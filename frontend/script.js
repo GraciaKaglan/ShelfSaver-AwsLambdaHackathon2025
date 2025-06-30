@@ -41,7 +41,6 @@ let allProducts = [];
 
 // Initialize the app
 document.addEventListener('DOMContentLoaded', async function() {
-    await loadConfig(); // Load config first
     initializeTelegramApp();
     loadUserInfo();
     loadProducts();
@@ -394,9 +393,8 @@ async function sendTestNotification() {
     try {
         console.log('🔔 Sending test notification...');
         
-        // Get chat ID from config file
-        const chatId = appConfig?.telegram?.demo_chat_id || 'demo';
-        console.log('📱 Using config chat ID:', chatId);
+        // Use your real chat ID - SIMPLE AND WORKING
+        const CHAT_ID = '1570390202'; 
         
         const response = await fetch(`${API_BASE_URL}/webhook`, {
             method: 'POST',
@@ -404,14 +402,14 @@ async function sendTestNotification() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 notification_test: true,
-                user_id: chatId
+                user_id: CHAT_ID
             })
         });
         
-        console.log('📤 Notification sent to chat ID:', chatId);
+        console.log('📤 Notification sent to:', CHAT_ID);
         
         if (typeof alert !== 'undefined') {
-            alert(`🔔 Test notification sent to chat ${chatId}! Check your Telegram.`);
+            alert('🔔 Test notification sent! Check your Telegram bot chat.');
         }
         
     } catch (error) {
