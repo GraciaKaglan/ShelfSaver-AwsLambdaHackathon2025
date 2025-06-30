@@ -13,6 +13,25 @@ const tg = window.Telegram?.WebApp || {
     openTelegramLink: (url) => window.open(url, '_blank')
 };
 
+// Global config
+let appConfig = null;
+
+// Load configuration at startup
+async function loadConfig() {
+    try {
+        const response = await fetch('./config.json');
+        appConfig = await response.json();
+        console.log('✅ Config loaded successfully');
+    } catch (error) {
+        console.error('❌ Failed to load config:', error);
+        // Fallback config
+        appConfig = {
+            telegram: { demo_chat_id: 'demo' },
+            api: { base_url: 'https://ifv2owwcx7.execute-api.eu-north-1.amazonaws.com/prod' }
+        };
+    }
+}
+
 // API Configuration
 const API_BASE_URL = 'https://ifv2owwcx7.execute-api.eu-north-1.amazonaws.com/prod';
 
@@ -21,7 +40,8 @@ let currentUserId = 'demo';
 let allProducts = [];
 
 // Initialize the app
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', async function() {
+    await loadConfig(); // Load config first
     initializeTelegramApp();
     loadUserInfo();
     loadProducts();
@@ -369,27 +389,14 @@ async function validateProductSilently(productId) {
     }
 }
 
+// Updated notification function
 async function sendTestNotification() {
     try {
         console.log('🔔 Sending test notification...');
         
-        // Try to get the user's real chat ID from their products
-        let userChatId = currentUserId; // fallback
-        
-        if (window.allProducts && window.allProducts.length > 0) {
-            // Find a product that belongs to the current user
-            const userProduct = window.allProducts.find(p => p.user_id && p.user_id !== 'demo');
-            if (userProduct) {
-                userChatId = userProduct.user_id;
-                console.log('📱 Found user chat ID from products:', userChatId);
-            }
-        }
-        
-        // If still no valid chat ID, use demo for now
-        if (!userChatId || userChatId === 'demo') {
-            userChatId = '1570390202'; // Your demo chat ID
-            console.log('📱 Using demo chat ID for testing');
-        }
+        // Get chat ID from config file
+        const chatId = appConfig?.telegram?.demo_chat_id || 'demo';
+        console.log('📱 Using config chat ID:', chatId);
         
         const response = await fetch(`${API_BASE_URL}/webhook`, {
             method: 'POST',
@@ -397,14 +404,14 @@ async function sendTestNotification() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 notification_test: true,
-                user_id: userChatId
+                user_id: chatId
             })
         });
         
-        console.log('📤 Notification sent to chat ID:', userChatId);
+        console.log('📤 Notification sent to chat ID:', chatId);
         
         if (typeof alert !== 'undefined') {
-            alert(`🔔 Test notification sent to chat ${userChatId}! Check your Telegram.`);
+            alert(`🔔 Test notification sent to chat ${chatId}! Check your Telegram.`);
         }
         
     } catch (error) {

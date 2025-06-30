@@ -192,3 +192,23 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Private configuration files
+config.json
+.env
+chat_id.txt
+
+# API keys and secrets
+*.key
+*.secret
+
+# Node modules (if you add them later)
+node_modules/
+
+# IDE files
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
