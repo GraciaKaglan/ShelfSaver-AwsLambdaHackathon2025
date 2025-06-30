@@ -66,6 +66,16 @@ function loadUserInfo() {
     }
 }
 
+// Add to your web app - keeps Lambda warm
+setInterval(async () => {
+    try {
+        await fetch(`${API_BASE_URL}/products?user_id=keepalive`);
+        console.log('🔥 Lambda kept warm');
+    } catch (e) {
+        console.log('⚠️ Warmup failed:', e);
+    }
+}, 240000); // Every 4 minutes
+
 async function loadProducts() {
     try {
         const productList = document.getElementById('product-list');
