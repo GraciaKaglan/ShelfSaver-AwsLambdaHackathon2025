@@ -145,8 +145,10 @@ function displayProducts(products) {
                 <div class="product-details">
                     ${product.quantity !== 'N/A' ? `<span class="quantity">${product.quantity}</span>` : ''}
                     <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
-                    <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
-                    ${isExpired(product.expiry) ? '<span class="expired-flag">🚩 EXPIRED</span>' : ''}
+                    ${isExpired(product.expiry) ? 
+                        '<span class="expired-flag">🚩 EXPIRED</span>' : 
+                        `<span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>`
+                    }
                     ${product.confidence ? `<span class="confidence">${product.confidence}%</span>` : ''}
                 </div>
                 <div class="product-actions">
