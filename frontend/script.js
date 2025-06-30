@@ -145,6 +145,8 @@ function displayProducts(products) {
                 <div class="product-details">
                     ${product.quantity !== 'N/A' ? `<span class="quantity">${product.quantity}</span>` : ''}
                     <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
+                    <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
+                    ${isExpired(product.expiry) ? '<span class="expired-flag">🚩 EXPIRED</span>' : ''}
                     ${product.confidence ? `<span class="confidence">${product.confidence}%</span>` : ''}
                 </div>
                 <div class="product-actions">
@@ -178,6 +180,25 @@ function isExpiringSoon(expiry) {
             return diffDays <= 3 && diffDays >= 0;
         }
         return false;
+    } catch (error) {
+        return false;
+    }
+}
+
+function isExpired(expiry) {
+    if (!expiry || expiry === 'Unknown') return false;
+    try {
+        const parts = expiry.split('/');
+        if (parts.length === 3) {
+            const day = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1;
+            let year = parseInt(parts[2]);
+            if (year < 100) year += year < 50 ? 2000 : 1900;
+            
+            const expiryDate = new Date(year, month, day);
+            const today = new Date();
+            return expiryDate < today;
+        }
     } catch (error) {
         return false;
     }
