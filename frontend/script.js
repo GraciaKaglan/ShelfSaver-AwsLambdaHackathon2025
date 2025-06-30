@@ -368,3 +368,31 @@ async function validateProductSilently(productId) {
         return false;
     }
 }
+
+async function sendTestNotification() {
+    try {
+        console.log('🔔 Sending test notification...');
+        
+        const response = await fetch(`${API_BASE_URL}/send-notification`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                user_id: currentUserId 
+            })
+        });
+        
+        if (response.ok) {
+            if (typeof alert !== 'undefined') {
+                alert('🔔 Test notification sent to your Telegram! Check your bot chat.');
+            }
+        } else {
+            throw new Error('Failed to send notification');
+        }
+        
+    } catch (error) {
+        console.error('❌ Notification error:', error);
+        if (typeof alert !== 'undefined') {
+            alert('Could not send test notification. Please try again.');
+        }
+    }
+}

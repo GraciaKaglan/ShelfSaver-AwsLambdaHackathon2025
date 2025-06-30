@@ -326,6 +326,17 @@ body {
     margin-left: 10px;
 }
 
+.notification-btn {
+    background: linear-gradient(135deg, #ff9500, #ff8c00);
+    color: white;
+    box-shadow: 0 4px 12px rgba(255, 149, 0, 0.3);
+}
+
+.notification-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(255, 149, 0, 0.4);
+}
+
 @keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
