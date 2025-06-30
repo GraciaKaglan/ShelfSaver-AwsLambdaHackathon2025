@@ -371,24 +371,40 @@ async function validateProductSilently(productId) {
 
 async function sendTestNotification() {
     try {
-        console.log('🔔 Sending test notification via no-cors...');
+        console.log('🔔 Sending test notification...');
         
-        // Use no-cors mode to bypass CORS completely
+        // Try to get the user's real chat ID from their products
+        let userChatId = currentUserId; // fallback
+        
+        if (window.allProducts && window.allProducts.length > 0) {
+            // Find a product that belongs to the current user
+            const userProduct = window.allProducts.find(p => p.user_id && p.user_id !== 'demo');
+            if (userProduct) {
+                userChatId = userProduct.user_id;
+                console.log('📱 Found user chat ID from products:', userChatId);
+            }
+        }
+        
+        // If still no valid chat ID, use demo for now
+        if (!userChatId || userChatId === 'demo') {
+            userChatId = '1570390202'; // Your demo chat ID
+            console.log('📱 Using demo chat ID for testing');
+        }
+        
         const response = await fetch(`${API_BASE_URL}/webhook`, {
             method: 'POST',
-            mode: 'no-cors', // 🚨 This bypasses CORS!
+            mode: 'no-cors',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 notification_test: true,
-                user_id: currentUserId 
+                user_id: userChatId
             })
         });
         
-        // Note: With no-cors, we can't read the response, but the request will go through
-        console.log('📤 Notification request sent (no-cors mode)');
+        console.log('📤 Notification sent to chat ID:', userChatId);
         
         if (typeof alert !== 'undefined') {
-            alert('🔔 Test notification sent! Check your Telegram bot chat.');
+            alert(`🔔 Test notification sent to chat ${userChatId}! Check your Telegram.`);
         }
         
     } catch (error) {
