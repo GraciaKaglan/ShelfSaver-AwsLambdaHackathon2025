@@ -403,8 +403,23 @@ async function sendTestNotification() {
     try {
         console.log('🔔 Sending test notification...');
         
-        // Use your real chat ID - SIMPLE AND WORKING
-        const CHAT_ID = '1570390202'; 
+        // Get chat ID dynamically from user's products
+        let userChatId = currentUserId; // fallback
+        
+        if (window.allProducts && window.allProducts.length > 0) {
+            // Find any product with a real chat ID (not 'demo')
+            const userProduct = window.allProducts.find(p => p.user_id && p.user_id !== 'demo');
+            if (userProduct) {
+                userChatId = userProduct.user_id;
+                console.log('📱 Using chat ID from products:', userChatId);
+            }
+        }
+        
+        // If still no valid chat ID, ask user to scan a product first
+        if (!userChatId || userChatId === 'demo') {
+            alert('⚠️ Please scan at least one product with the bot first, then try notifications!');
+            return;
+        }
         
         const response = await fetch(`${API_BASE_URL}/webhook`, {
             method: 'POST',
@@ -412,14 +427,14 @@ async function sendTestNotification() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ 
                 notification_test: true,
-                user_id: CHAT_ID
+                user_id: userChatId
             })
         });
         
-        console.log('📤 Notification sent to:', CHAT_ID);
+        console.log('📤 Notification sent to chat ID:', userChatId);
         
         if (typeof alert !== 'undefined') {
-            alert('🔔 Test notification sent! Check your Telegram bot chat.');
+            alert(`🔔 Test notification sent to chat ${userChatId}! Check your Telegram.`);
         }
         
     } catch (error) {
