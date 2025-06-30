@@ -144,7 +144,6 @@ function displayProducts(products) {
                 <div class="product-name">${product.name}</div>
                 <div class="product-details">
                     ${product.quantity !== 'N/A' ? `<span class="quantity">${product.quantity}</span>` : ''}
-                    <span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>
                     ${isExpired(product.expiry) ? 
                         '<span class="expired-flag">🚩 EXPIRED</span>' : 
                         `<span class="expiry-date ${getExpiryClass(product.expiry)}">${product.expiry}</span>`
