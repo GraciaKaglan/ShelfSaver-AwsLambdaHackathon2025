@@ -1,0 +1,9 @@
+{
+  "telegram": {
+    "demo_chat_id": "1570390202",
+    "bot_username": "shelfsaver_graciaOve_bot"
+  },
+  "api": {
+    "base_url": "https://ifv2owwcx7.execute-api.eu-north-1.amazonaws.com/prod"
+  }
+} 
