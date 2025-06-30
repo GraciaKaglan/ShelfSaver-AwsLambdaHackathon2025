@@ -176,7 +176,7 @@ function isExpiringSoon(expiry) {
             const diffTime = expiryDate - today;
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
-            return diffDays <= 3 && diffDays >= 0;
+            return diffDays <= 1 && diffDays >= 0;
         }
         return false;
     } catch (error) {
@@ -223,7 +223,7 @@ function getExpiryClass(expiry) {
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
             
             if (diffDays < 0) return 'expired';
-            if (diffDays <= 3) return 'warning';
+            if (diffDays <= 1) return 'warning';
             return 'safe';
         }
         return 'unknown';
